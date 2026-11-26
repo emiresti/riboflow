@@ -1,5 +1,7 @@
 # RiboFlow
 
+[![Live Demo](https://img.shields.io/badge/▶_Live_Demo-emiresti.github.io/riboflow-2dd4bf?style=for-the-badge&labelColor=0b1022)](https://emiresti.github.io/riboflow/) [![CI](https://github.com/emiresti/riboflow/actions/workflows/ci.yml/badge.svg)](https://github.com/emiresti/riboflow/actions/workflows/ci.yml)
+
 **Co-Translational Ribosome Traffic ($\ell$-TASEP) Simulator, Synonymous Mutation Impact Lab & Pause-Preserving Codon Harmonizer**
 
 > Why can a single *"silent"* DNA mutation—changing **zero** amino acids—disrupt protein folding or trigger mRNA degradation?
