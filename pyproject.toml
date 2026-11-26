@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "riboflow"
+version = "0.1.0"
+description = "Co-translational ribosome traffic (TASEP) simulator, synonymous mutation impact lab, and pause-preserving codon harmonizer."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Muhammed Emir Esti", email = "muhammedemiresti3@gmail.com"}
+]
+requires-python = ">=3.10"
+keywords = [
+    "bioinformatics",
+    "molecular-biology",
+    "ribosome-profiling",
+    "tasep",
+    "codon-harmonization",
+    "synonymous-mutations",
+    "translation-kinetics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+[project.scripts]
+riboflow = "riboflow.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+riboflow = ["web/static/*"]
