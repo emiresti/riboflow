@@ -1,4 +1,4 @@
-"""Command-line interface for RiboFlow."""
+"""Command-line interface for RiboFlow v2.0."""
 
 from __future__ import annotations
 
@@ -10,12 +10,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from . import __version__
+from .folding import fold_5prime_window, unfold_5prime_synonymously
 from .harmonizer import compare_harmonization
 from .mutation import apply_synonymous_mutations, scan_critical_silent_mutations
 from .organisms import ORGANISMS, get_organism
 from .samples import SAMPLES
 from .sequence import analyze_sequence, parse_fasta_or_raw
-from .simulator import simulate_ribosome_traffic
+from .simulator import simulate_ribosome_traffic, sweep_phase_diagram
+from .synbio import design_synbio_sequence
 
 
 def _load_sequence(args: argparse.Namespace) -> tuple[str, str]:
@@ -58,7 +60,7 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         return 0
 
     print(f"\nRiboFlow Sequence Analysis — {name}")
-    print("=" * 60)
+    print("=" * 64)
     print(f"Organism            : {org.name} ({org.ribosome_type})")
     print(f"Length              : {res.codon_count} codons ({len(res.sequence)} nt)")
     print(f"CAI                 : {res.cai:.4f}")
@@ -66,6 +68,36 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
     print(f"Mean Elongation     : {res.mean_elongation_rate:.2f} codons/s")
     print(f"%MinMax Range       : {res.min_minmax:+.1f} to {res.max_minmax:+.1f}")
     print(f"Pause Codons (<= -15): {len(res.pause_sites)} site(s)")
+    return 0
+
+
+def _cmd_fold(args: argparse.Namespace) -> int:
+    name, seq = _load_sequence(args)
+    if args.melt:
+        res = unfold_5prime_synonymously(seq)
+        if args.json:
+            print(json.dumps(asdict(res), indent=2))
+            return 0
+        print(f"\nRiboFlow 5' mRNA Hairpin Unfolding — {name}")
+        print("=" * 68)
+        print(f"Before : dG = {res.before.mfe_kcal_mol:+.2f} kcal/mol | Access = {res.before.initiation_accessibility * 100:.1f}% | {res.before.severity}")
+        print(f"         {res.before.dot_bracket}")
+        print(f"After  : dG = {res.after.mfe_kcal_mol:+.2f} kcal/mol | Access = {res.after.initiation_accessibility * 100:.1f}% | {res.after.severity}")
+        print(f"         {res.after.dot_bracket}")
+        print(f"Gain   : ΔMFE = {res.delta_mfe:+.2f} kcal/mol | Access {res.accessibility_gain_percent:+.1f}% | Codons changed: {res.codons_changed} | Protein 100% same: {res.protein_preserved}")
+        return 0
+
+    rep = fold_5prime_window(seq, window_nt=args.window)
+    if args.json:
+        print(json.dumps(asdict(rep), indent=2))
+        return 0
+    print(f"\nRiboFlow 5' mRNA Secondary Structure — {name}")
+    print("=" * 68)
+    print(f"5' Window ({rep.window_nt} nt) : {rep.rna_sequence}")
+    print(f"Dot-Bracket      : {rep.dot_bracket}")
+    print(f"MFE (ΔG_5')      : {rep.mfe_kcal_mol:+.2f} kcal/mol ({rep.severity})")
+    print(f"AUG-Zone Paired  : {rep.start_region_paired * 100:.1f}%")
+    print(f"Init Access      : {rep.initiation_accessibility * 100:.1f}%")
     return 0
 
 
@@ -78,6 +110,8 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         initiation_rate=args.initiation_rate,
         duration_seconds=args.duration,
         capture_frames=0,
+        couple_5prime_folding=not args.no_5prime_coupling,
+        enable_tunnel_drag=not args.no_tunnel_drag,
         seed=args.seed,
     )
 
@@ -85,10 +119,11 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
         print(json.dumps(asdict(sim), indent=2))
         return 0
 
-    print(f"\nRiboFlow l-TASEP Ribosome Traffic Simulation — {name}")
-    print("=" * 60)
+    print(f"\nRiboFlow v2.0 l-TASEP Ribosome Traffic Simulation — {name}")
+    print("=" * 66)
     print(f"Organism            : {org.name} (footprint = {sim.ribosome_footprint} codons)")
-    print(f"Initiation Rate (a) : {sim.initiation_rate:.3f} /s")
+    print(f"Nominal -> Eff alpha: {sim.initiation_rate:.3f} -> {sim.effective_initiation_rate:.3f} /s (5' ΔG = {sim.folding_5prime.mfe_kcal_mol:+.1f} kcal/mol)")
+    print(f"Peak Tunnel Charge  : +{sim.peak_tunnel_charge:.1f} (exit-tunnel drag: {'ON' if sim.enable_tunnel_drag else 'OFF'})")
     print(f"Traffic Phase       : {sim.phase_regime}")
     print(f"Protein Flux (J)    : {sim.protein_flux_per_min:.2f} proteins/min")
     print(f"Mean Ribosomes      : {sim.mean_ribosomes_on_mrna:.2f} on mRNA")
@@ -96,6 +131,65 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
     print(f"Max Queue Length    : {sim.max_queue_length} ribosomes")
     print(f"NGD / RQC Risk      : {sim.ngd_risk_score:.1f} / 100")
     print(f"Peak Bottleneck     : codon #{sim.bottleneck_codon + 1}")
+    return 0
+
+
+def _cmd_phase(args: argparse.Namespace) -> int:
+    name, seq = _load_sequence(args)
+    org = get_organism(args.organism)
+    rep = sweep_phase_diagram(seq, org, seed=args.seed)
+    if args.json:
+        print(json.dumps(asdict(rep), indent=2))
+        return 0
+    print(f"\nRiboFlow TASEP Phase Transition Sweep — {name} ({org.name})")
+    print(f"Critical Jamming Threshold alpha_c: {rep.critical_alpha or 'None (jam-free)'} | Max Flux: {rep.max_flux_per_min:.2f}/min")
+    print("=" * 74)
+    print(f"{'Alpha':>7} {'Eff a':>7} {'Flux/min':>10} {'Density':>9} {'Coll %':>9} {'NGD':>7}  Phase")
+    print("-" * 74)
+    for pt in rep.points:
+        print(
+            f"{pt.alpha:>7.2f} {pt.effective_alpha:>7.2f} {pt.protein_flux_per_min:>10.2f} "
+            f"{pt.mean_density:>9.3f} {pt.collision_fraction * 100:>8.1f}% {pt.ngd_risk_score:>7.1f}  {pt.phase_regime}"
+        )
+    return 0
+
+
+def _cmd_synbio(args: argparse.Namespace) -> int:
+    name, seq = _load_sequence(args)
+    src = get_organism(args.source)
+    host = get_organism(args.host)
+    rep = design_synbio_sequence(
+        seq,
+        source=src,
+        host=host,
+        preserve_pauses=not args.no_pauses,
+        unfold_5prime=not args.no_unfold_5prime,
+        uridine_deplete=args.vaccine_u_deplete,
+        scrub_restriction_sites=not args.no_scrub_sites,
+        avoid_homopolymers=not args.no_homopolymer_filter,
+        initiation_rate=args.initiation_rate,
+        seed=args.seed,
+    )
+    if args.json:
+        print(json.dumps(asdict(rep), indent=2))
+        return 0
+
+    print(f"\nRiboFlow v2.0 Multi-Objective SynBio & mRNA Designer — {name}")
+    print(f"Transfer: {src.name} -> {host.name} | Protein 100% Preserved: {rep.protein_preserved} | Changed: {rep.percent_changed}%")
+    print("=" * 76)
+    print(f"5' Hairpin MFE (ΔG) : {rep.before_qc.folding_5prime.mfe_kcal_mol:+.2f} -> {rep.after_qc.folding_5prime.mfe_kcal_mol:+.2f} kcal/mol")
+    print(f"5' Init Access      : {rep.before_qc.folding_5prime.initiation_accessibility * 100:.1f}% -> {rep.after_qc.folding_5prime.initiation_accessibility * 100:.1f}%")
+    print(f"Folding Rhythm (r)  : {rep.original_rhythm_r:+.3f} -> {rep.designed_rhythm_r:+.3f}")
+    print(f"Uridine / UU Pairs  : {rep.before_qc.uridine_percent:.1f}% ({rep.before_qc.uu_dinucleotides} UU) -> {rep.after_qc.uridine_percent:.1f}% ({rep.after_qc.uu_dinucleotides} UU)")
+    print(f"Cloning Sites Left  : {len(rep.before_qc.restriction_hits)} -> {len(rep.after_qc.restriction_hits)}")
+    print(f"Homopolymer >=5 nt  : {rep.before_qc.homopolymer_violations} -> {rep.after_qc.homopolymer_violations}")
+    print(f"Protein Flux (J)    : {rep.before_sim.protein_flux_per_min:.2f} -> {rep.after_sim.protein_flux_per_min:.2f} /min")
+    print(f"NGD Collision Risk  : {rep.before_sim.ngd_risk_score:.1f} -> {rep.after_sim.ngd_risk_score:.1f} / 100")
+
+    if args.output_fasta:
+        out = Path(args.output_fasta)
+        out.write_text(f">{name}_riboflow_v2_synbio\n{rep.designed_sequence}\n", encoding="utf-8")
+        print(f"\nSaved SynBio FASTA to: {out}")
     return 0
 
 
@@ -226,7 +320,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="riboflow",
-        description="RiboFlow: Co-translational ribosome traffic (l-TASEP) & codon harmonization suite.",
+        description="RiboFlow v2.0: Biophysical ribosome traffic, 5' mRNA folding & SynBio/mRNA vaccine designer.",
     )
     parser.add_argument("--version", action="version", version=f"riboflow {__version__}")
 
@@ -237,18 +331,52 @@ def build_parser() -> argparse.ArgumentParser:
     p_an = sub.add_parser("analyze", help="Compute CAI, GC3, RSCU, and %%MinMax pause profile.")
     _add_sequence_args(p_an)
     p_an.add_argument("-o", "--organism", choices=org_choices, default="ecoli")
-    p_an.add_argument("--json", action="store_true", help="Output machine-readable JSON.")
+    p_an.add_argument("--json", action="store_true")
     p_an.set_defaults(func=_cmd_analyze)
 
+    # fold
+    p_fold = sub.add_parser("fold", help="Compute 5' mRNA hairpin MFE (dG) or unfold synonymously.")
+    _add_sequence_args(p_fold)
+    p_fold.add_argument("-w", "--window", type=int, default=45)
+    p_fold.add_argument("--melt", action="store_true", help="Melt inhibitory 5' hairpin synonymously.")
+    p_fold.add_argument("--json", action="store_true")
+    p_fold.set_defaults(func=_cmd_fold)
+
     # simulate
-    p_sim = sub.add_parser("simulate", help="Run l-TASEP ribosome traffic & collision simulation.")
+    p_sim = sub.add_parser("simulate", help="Run l-TASEP simulation with 5' hairpin & exit-tunnel physics.")
     _add_sequence_args(p_sim)
     p_sim.add_argument("-o", "--organism", choices=org_choices, default="ecoli")
     p_sim.add_argument("-a", "--initiation-rate", type=float, default=None)
     p_sim.add_argument("-d", "--duration", type=float, default=120.0)
+    p_sim.add_argument("--no-5prime-coupling", action="store_true")
+    p_sim.add_argument("--no-tunnel-drag", action="store_true")
     p_sim.add_argument("--seed", type=int, default=42)
     p_sim.add_argument("--json", action="store_true")
     p_sim.set_defaults(func=_cmd_simulate)
+
+    # phase
+    p_ph = sub.add_parser("phase", help="Sweep initiation rate alpha to map TASEP phase transition.")
+    _add_sequence_args(p_ph)
+    p_ph.add_argument("-o", "--organism", choices=org_choices, default="ecoli")
+    p_ph.add_argument("--seed", type=int, default=42)
+    p_ph.add_argument("--json", action="store_true")
+    p_ph.set_defaults(func=_cmd_phase)
+
+    # synbio
+    p_sb = sub.add_parser("synbio", help="Multi-objective SynBio & mRNA vaccine (U-depletion + site scrubbing) designer.")
+    _add_sequence_args(p_sb)
+    p_sb.add_argument("-s", "--source", choices=org_choices, default="human")
+    p_sb.add_argument("-t", "--host", choices=org_choices, default="ecoli")
+    p_sb.add_argument("--vaccine-u-deplete", action="store_true", help="Enable mRNA vaccine uridine depletion.")
+    p_sb.add_argument("--no-pauses", action="store_true")
+    p_sb.add_argument("--no-unfold-5prime", action="store_true")
+    p_sb.add_argument("--no-scrub-sites", action="store_true")
+    p_sb.add_argument("--no-homopolymer-filter", action="store_true")
+    p_sb.add_argument("-a", "--initiation-rate", type=float, default=None)
+    p_sb.add_argument("--seed", type=int, default=42)
+    p_sb.add_argument("--output-fasta", default=None)
+    p_sb.add_argument("--json", action="store_true")
+    p_sb.set_defaults(func=_cmd_synbio)
 
     # harmonize
     p_harm = sub.add_parser("harmonize", help="Compare native, naive CAI, and pause-preserving harmonization.")
@@ -276,7 +404,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_mut.set_defaults(func=_cmd_mutate)
 
     # serve
-    p_srv = sub.add_parser("serve", help="Launch the interactive RiboFlow web laboratory.")
+    p_srv = sub.add_parser("serve", help="Launch the interactive RiboFlow v2.0 web laboratory.")
     p_srv.add_argument("--host", default="127.0.0.1")
     p_srv.add_argument("--port", type=int, default=8765)
     p_srv.add_argument("--open", action="store_true", help="Open web browser automatically.")

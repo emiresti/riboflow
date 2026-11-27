@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "riboflow"
-version = "0.1.0"
-description = "Co-translational ribosome traffic (TASEP) simulator, synonymous mutation impact lab, and pause-preserving codon harmonizer."
+version = "2.0.0"
+description = "Biophysical ribosome traffic (l-TASEP), 5' mRNA folding thermodynamics, exit-tunnel drag, synonymous mutation lab & mRNA vaccine / SynBio codon designer."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [

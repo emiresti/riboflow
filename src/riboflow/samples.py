@@ -42,6 +42,52 @@ SAMPLES: Dict[str, SampleGene] = {
             "TCCCTCTACCAGCTGGAGAACTACTGCAACTAG"
         ),
     ),
+    "sars_cov2_rbd": SampleGene(
+        id="sars_cov2_rbd",
+        name="SARS-CoV-2 Spike RBD (mRNA Vaccine Model)",
+        organism="human",
+        recommended_host="human",
+        summary_en=(
+            "Native AT/U-rich Spike receptor-binding domain segment (34.8% Uridine). "
+            "Ideal for testing mRNA Vaccine Uridine-Depletion (m1Ψ / TLR7-8 immune evasion) "
+            "and 5' hairpin unfolding in the SynBio Designer."
+        ),
+        summary_tr=(
+            "Doğal Uridin-zengin SARS-CoV-2 Spike RBD segmenti (%34.8 Uridin). "
+            "mRNA Aşı Tasarımcısında Uridin azaltma (TLR7/8 bağışıklık kaçışı) ve "
+            "5' saç tokası açma optimizasyonunu denemek için idealdir."
+        ),
+        sequence=(
+            "ATGAGAGTCCAACCAACAGAATCTATTGTTAGATTTCCTAATATTACAAACTTGTGCCCT"
+            "TTTGGTGAAGTTTTTAACGCCACCAGATTTGCATCTGTTTATGCTTGGAACAGGAAGAGA"
+            "ATCAGCAACTGTGTTGCTGATTATTCTGTCCTATATAATTCCGCATCATTTTCCACTTTT"
+            "AAGTGTTATGGAGTGTCTCCTACTAAATTAAATGATCTCTGCTTTACTAATGTCTATGCA"
+            "GATTCATTTGTAATTAGAGGTGATGAAGTCAGACAAATCGCTCCAGGGCAAACTGGAAAG"
+            "ATTGCTGATTATAATTATAAATTACCAGATGATTTTACAGGCTGCGTTATAGCTTGA"
+        ),
+    ),
+    "polybasic_arrest": SampleGene(
+        id="polybasic_arrest",
+        name="5' Hairpin + Polybasic Exit-Tunnel Arrest + Cloning Trap",
+        organism="human",
+        recommended_host="ecoli",
+        summary_en=(
+            "Synthetic stress-test gene combining three real wet-lab failure modes: "
+            "a tight 5' GC hairpin blocking AUG initiation, a poly-Arg/Lys (KRKKRKR) "
+            "exit-tunnel electrostatic stall tract, and forbidden EcoRI/BamHI/BsaI cloning sites."
+        ),
+        summary_tr=(
+            "Üç gerçek ıslak-lab sorununu birleştiren sentetik stres testi: AUG'yi kilitleyen "
+            "sıkı 5' GC saç tokası, çıkış tünelinde elektrostatik frenleme yapan polibazik "
+            "(KRKKRKR) küme ve yasaklı EcoRI/BamHI/BsaI klonlama kesim bölgeleri!"
+        ),
+        sequence=(
+            "ATGGCGGCCGCCGGCGGCGGCCGCCATGGCCTGAAAGCTGAATTCCTGAAAGCTGGATCC"
+            "GCTGTTCTGAAAGCTGCTGAAGTTCTGGCTCTGAAAGGTCTCCTGAAAGCTGTTCTGAAA"
+            "AAGCGTAAGAAACGTAAACGTAAGAAGCGCAAAGCTCTGAAAGCTGTTCTGAAAGCTGCT"
+            "GAAGTTCTGGCTCTGAAAGCTGTTCTGAAAGCTGCTGAAGTTCTGGCTCTGAAAGTTTAA"
+        ),
+    ),
     "cftr_nbd1": SampleGene(
         id="cftr_nbd1",
         name="Human CFTR NBD1 Folding Segment",

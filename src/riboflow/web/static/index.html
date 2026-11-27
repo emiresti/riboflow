@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RiboFlow — Co-Translational Ribosome Traffic & Codon Harmonization Lab</title>
+  <title>RiboFlow v2.0 — Biophysical Ribosome Traffic, 5' mRNA Folding &amp; SynBio Designer</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -20,12 +20,13 @@
           </svg>
         </div>
         <div>
-          <h1>RiboFlow <span class="badge">v0.1</span></h1>
-          <p class="subtitle" data-i18n="subtitle">Co-Translational Ribosome Traffic (ℓ-TASEP) &amp; Codon Harmonization Lab</p>
+          <h1>RiboFlow <span class="badge">v2.0</span></h1>
+          <p class="subtitle" data-i18n="subtitle">Biophysical Ribosome Traffic (ℓ-TASEP), 5' mRNA Folding &amp; mRNA Vaccine / SynBio Lab</p>
         </div>
       </div>
 
       <div class="topbar-actions">
+        <button id="export-report-btn" class="btn btn-secondary" data-i18n="exportReport">📄 Lab Report</button>
         <div class="lang-toggle" role="group" aria-label="Language">
           <button id="lang-tr" class="lang-btn active">TR</button>
           <button id="lang-en" class="lang-btn">EN</button>
@@ -47,7 +48,7 @@
 
         <div class="field slider-field">
           <div class="slider-header">
-            <label for="alpha-slider" data-i18n="alphaLabel">Initiation Rate (α)</label>
+            <label for="alpha-slider" data-i18n="alphaLabel">Nominal Initiation Rate (α)</label>
             <span id="alpha-value" class="mono-pill">0.85 /s</span>
           </div>
           <input id="alpha-slider" type="range" min="0.10" max="2.50" step="0.05" value="0.85" />
@@ -55,12 +56,36 @@
 
         <div class="field action-field">
           <button id="run-btn" class="btn btn-primary" data-i18n="runSim">Run Simulation</button>
-          <button id="toggle-fasta-btn" class="btn btn-ghost" data-i18n="customFasta">Custom FASTA</button>
+          <button id="toggle-ncbi-btn" class="btn btn-secondary" data-i18n="ncbiBtn">🌐 NCBI</button>
+          <button id="toggle-fasta-btn" class="btn btn-ghost" data-i18n="customFasta">FASTA</button>
         </div>
+      </div>
+
+      <div class="physics-toggles">
+        <label class="toggle-chip">
+          <input id="toggle-5prime" type="checkbox" checked />
+          <span data-i18n="toggle5p">Couple 5' mRNA Hairpin ΔG → α_eff</span>
+        </label>
+        <label class="toggle-chip">
+          <input id="toggle-tunnel" type="checkbox" checked />
+          <span data-i18n="toggleTunnel">Ribosome Exit-Tunnel Charge Drag (+K/R)</span>
+        </label>
+        <span id="active-gene-pill" class="mono-pill gene-tag"></span>
       </div>
 
       <p id="sample-description" class="sample-desc"></p>
 
+      <!-- Live NCBI RefSeq Importer -->
+      <div id="ncbi-box" class="custom-fasta hidden">
+        <label for="ncbi-query" data-i18n="ncbiPrompt">Fetch live coding sequence from NCBI RefSeq (e.g. INS, TP53, CFTR, BRCA1, NM_000207):</label>
+        <div class="ncbi-row">
+          <input id="ncbi-query" type="text" placeholder="INS, TP53, CFTR or NM_000207" value="INS" />
+          <button id="ncbi-fetch-btn" class="btn btn-primary" data-i18n="ncbiFetchBtn">Fetch Live CDS</button>
+          <span id="ncbi-status" class="muted"></span>
+        </div>
+      </div>
+
+      <!-- Custom FASTA -->
       <div id="custom-fasta-box" class="custom-fasta hidden">
         <label for="fasta-input" data-i18n="pasteFasta">Paste coding DNA / mRNA sequence (FASTA or raw ATG...TAA):</label>
         <textarea id="fasta-input" rows="4" spellcheck="false" placeholder=">MyGene&#10;ATGGCT...TAA"></textarea>
@@ -75,10 +100,15 @@
       <div class="kpi-card">
         <span class="kpi-label" data-i18n="kpiFlux">Protein Flux (J)</span>
         <strong id="kpi-flux" class="kpi-val">—</strong>
-        <span class="kpi-sub" data-i18n="kpiFluxSub">proteins / min</span>
+        <span id="kpi-eff-alpha" class="kpi-sub">proteins / min</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-label" data-i18n="kpiCollision">Disome Collision Time</span>
+        <span class="kpi-label" data-i18n="kpiHairpin">5' Hairpin (ΔG)</span>
+        <strong id="kpi-mfe" class="kpi-val">—</strong>
+        <span id="kpi-access" class="kpi-sub">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label" data-i18n="kpiCollision">Disome Collisions</span>
         <strong id="kpi-collision" class="kpi-val">—</strong>
         <span id="kpi-collision-events" class="kpi-sub">—</span>
       </div>
@@ -88,30 +118,32 @@
         <span id="kpi-queue" class="kpi-sub">—</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-label" data-i18n="kpiCai">CAI &amp; GC / GC3</span>
-        <strong id="kpi-cai" class="kpi-val">—</strong>
-        <span id="kpi-gc" class="kpi-sub">—</span>
+        <span class="kpi-label" data-i18n="kpiTunnel">Exit-Tunnel Charge</span>
+        <strong id="kpi-tunnel" class="kpi-val">—</strong>
+        <span id="kpi-cai-gc" class="kpi-sub">—</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-label" data-i18n="kpiPhase">TASEP Traffic Phase</span>
+        <span class="kpi-label" data-i18n="kpiPhase">TASEP Phase</span>
         <strong id="kpi-phase" class="kpi-val kpi-phase-text">—</strong>
         <span id="kpi-ribos" class="kpi-sub">—</span>
       </div>
     </section>
 
     <nav class="tab-bar" role="tablist">
-      <button class="tab-btn active" data-tab="traffic" data-i18n="tabTraffic">1. Live Ribosome Traffic &amp; Ribo-seq</button>
-      <button class="tab-btn" data-tab="mutation" data-i18n="tabMutation">2. Silent Mutation Lab</button>
-      <button class="tab-btn" data-tab="harmonize" data-i18n="tabHarmonize">3. Codon Harmonizer</button>
+      <button class="tab-btn active" data-tab="traffic" data-i18n="tabTraffic">1. Live Traffic &amp; Tunnel</button>
+      <button class="tab-btn" data-tab="folding" data-i18n="tabFolding">2. 5' mRNA Hairpin ΔG</button>
+      <button class="tab-btn" data-tab="mutation" data-i18n="tabMutation">3. Silent Mutation Lab</button>
+      <button class="tab-btn" data-tab="synbio" data-i18n="tabSynbio">4. SynBio &amp; mRNA Vaccine</button>
+      <button class="tab-btn" data-tab="phase" data-i18n="tabPhase">5. Phase Diagram (α Sweep)</button>
     </nav>
 
-    <!-- TAB 1: LIVE TRAFFIC -->
+    <!-- TAB 1: LIVE TRAFFIC & EXIT TUNNEL -->
     <main id="tab-traffic" class="tab-panel active">
       <div class="card stage-card">
         <div class="stage-header">
           <div>
-            <h2 data-i18n="stageTitle">Real-Time ℓ-TASEP Ribosome Translation Visualizer</h2>
-            <p class="muted" data-i18n="stageHint">Each ribosome occludes 10 codons (~30 nt). Red pulses mark steric disome collisions that trigger No-Go Decay (NGD).</p>
+            <h2 data-i18n="stageTitle">Real-Time ℓ-TASEP Ribosome Translation &amp; Exit-Tunnel Visualizer</h2>
+            <p class="muted" data-i18n="stageHint">Each ribosome occludes 10 codons (~30 nt). Crimson pulses = Disome collisions (NGD). Violet glow = polybasic (+K/R) exit-tunnel stall.</p>
           </div>
           <div class="playback-controls">
             <button id="play-pause-btn" class="btn btn-secondary">Pause</button>
@@ -123,6 +155,7 @@
                 <option value="2">2×</option>
               </select>
             </label>
+            <button class="btn btn-ghost png-btn" data-canvas="traffic-canvas" data-name="riboflow_traffic">📷 PNG</button>
             <span id="sim-clock" class="mono-pill">t = 0.0 s</span>
           </div>
         </div>
@@ -135,33 +168,93 @@
           <span class="legend-item"><i class="dot dot-fast"></i> <span data-i18n="legFast">Fast codon</span></span>
           <span class="legend-item"><i class="dot dot-mid"></i> <span data-i18n="legMid">Moderate codon</span></span>
           <span class="legend-item"><i class="dot dot-slow"></i> <span data-i18n="legSlow">Rare / pause codon</span></span>
-          <span class="legend-item"><i class="dot dot-ribo"></i> <span data-i18n="legRibo">Translating ribosome</span></span>
+          <span class="legend-item"><i class="dot dot-ribo"></i> <span data-i18n="legRibo">Active ribosome</span></span>
+          <span class="legend-item"><i class="dot dot-tunnel"></i> <span data-i18n="legTunnel">Polybasic exit-tunnel drag (+K/R)</span></span>
           <span class="legend-item"><i class="dot dot-coll"></i> <span data-i18n="legColl">Collided disome (NGD risk)</span></span>
         </div>
       </div>
 
-      <div class="charts-grid">
+      <div class="charts-grid-3">
         <div class="card chart-card">
-          <h3 data-i18n="chartRiboseqTitle">Simulated Ribo-seq &amp; Disome-seq Profile</h3>
-          <p class="muted" data-i18n="chartRiboseqSub">Time-averaged ribosome A-site occupancy (teal) and disome collision peaks (crimson) along the mRNA.</p>
-          <canvas id="riboseq-canvas" width="540" height="210"></canvas>
+          <div class="chart-head">
+            <h3 data-i18n="chartRiboseqTitle">Simulated Ribo-seq &amp; Disome-seq</h3>
+            <button class="btn btn-ghost btn-xs png-btn" data-canvas="riboseq-canvas" data-name="riboflow_riboseq">📷</button>
+          </div>
+          <p class="muted" data-i18n="chartRiboseqSub">Ribosome occupancy (teal) &amp; disome collision peaks (crimson).</p>
+          <canvas id="riboseq-canvas" width="360" height="190"></canvas>
         </div>
 
         <div class="card chart-card">
-          <h3 data-i18n="chartMinmaxTitle">%MinMax Co-Translational Folding Rhythm</h3>
-          <p class="muted" data-i18n="chartMinmaxSub">Positive peaks indicate fast clusters; negative amber troughs indicate putative co-translational folding pauses.</p>
-          <canvas id="minmax-canvas" width="540" height="210"></canvas>
+          <div class="chart-head">
+            <h3 data-i18n="chartMinmaxTitle">%MinMax Folding Rhythm</h3>
+            <button class="btn btn-ghost btn-xs png-btn" data-canvas="minmax-canvas" data-name="riboflow_minmax">📷</button>
+          </div>
+          <p class="muted" data-i18n="chartMinmaxSub">Positive fast clusters vs. negative amber co-translational pauses.</p>
+          <canvas id="minmax-canvas" width="360" height="190"></canvas>
+        </div>
+
+        <div class="card chart-card">
+          <div class="chart-head">
+            <h3 data-i18n="chartTunnelTitle">Exit-Tunnel Charge (+K/R Drag)</h3>
+            <button class="btn btn-ghost btn-xs png-btn" data-canvas="tunnel-canvas" data-name="riboflow_tunnel">📷</button>
+          </div>
+          <p class="muted" data-i18n="chartTunnelSub">Positively charged nascent chain electrostatic braking inside rRNA tunnel.</p>
+          <canvas id="tunnel-canvas" width="360" height="190"></canvas>
         </div>
       </div>
     </main>
 
-    <!-- TAB 2: SILENT MUTATION LAB -->
+    <!-- TAB 2: 5' mRNA HAIRPIN THERMODYNAMICS -->
+    <section id="tab-folding" class="tab-panel">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="foldTitle">5' mRNA Secondary Structure (Turner MFE ΔG) &amp; Hairpin Melter</h2>
+            <p class="muted" data-i18n="foldSub">Tight hairpins within the first 45 nt around AUG physically block 30S/43S ribosome recruitment. Click below to melt inhibitory hairpins synonymously (100% identical protein).</p>
+          </div>
+          <div class="section-actions">
+            <button id="melt-hairpin-btn" class="btn btn-primary" data-i18n="meltBtn">🔥 Melt 5' Hairpin Synonymously</button>
+            <button class="btn btn-ghost png-btn" data-canvas="arc-canvas" data-name="riboflow_5prime_arcs">📷 PNG</button>
+          </div>
+        </div>
+
+        <div id="fold-metrics" class="mut-metrics-grid"></div>
+
+        <div class="canvas-wrap">
+          <canvas id="arc-canvas" width="1100" height="250"></canvas>
+        </div>
+        <div class="legend-row">
+          <span class="legend-item"><i class="dot dot-fast"></i> G–C Pair (Strong)</span>
+          <span class="legend-item"><i class="dot dot-sky"></i> A–U Pair</span>
+          <span class="legend-item"><i class="dot dot-mid"></i> G–U Wobble</span>
+          <span class="legend-item"><i class="dot dot-coll"></i> AUG Initiation Zone (nt 1–15)</span>
+        </div>
+
+        <pre id="dot-bracket-box" class="fasta-pre" style="margin-top:12px;"></pre>
+
+        <div id="melt-comparison" class="melt-box hidden">
+          <div class="section-head">
+            <div>
+              <h3 data-i18n="meltAfterTitle">After Synonymous 5' Hairpin Melting (100% Identical Protein)</h3>
+              <span id="melt-gain-badge" class="protein-badge"></span>
+            </div>
+            <button id="load-melted-btn" class="btn btn-primary" data-i18n="loadMeltedBtn">Load Unfolded mRNA into Simulator</button>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="arc-after-canvas" width="1100" height="220"></canvas>
+          </div>
+          <pre id="dot-bracket-after" class="fasta-pre" style="margin-top:10px;"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: SILENT MUTATION LAB -->
     <section id="tab-mutation" class="tab-panel">
       <div class="card">
         <div class="section-head">
           <div>
             <h2 data-i18n="mutTitle">Synonymous ("Silent") Mutation Impact Lab</h2>
-            <p class="muted" data-i18n="mutSub">Click any codon below to swap it for a synonymous codon. The protein sequence stays 100% identical—watch how translation kinetics and collisions shift.</p>
+            <p class="muted" data-i18n="mutSub">Click any codon below to swap it for a synonymous codon. Protein stays 100% identical—watch kinetics and collisions shift.</p>
           </div>
           <div class="section-actions">
             <button id="scan-hotspots-btn" class="btn btn-primary" data-i18n="scanBtn">Scan Most Dangerous Silent Mutations</button>
@@ -198,13 +291,13 @@
       </div>
     </section>
 
-    <!-- TAB 3: CODON HARMONIZER -->
-    <section id="tab-harmonize" class="tab-panel">
+    <!-- TAB 4: SYNBIO & mRNA VACCINE DESIGNER -->
+    <section id="tab-synbio" class="tab-panel">
       <div class="card">
         <div class="section-head">
           <div>
-            <h2 data-i18n="harmTitle">Pause-Preserving Codon Harmonizer vs. Naive CAI Optimization</h2>
-            <p class="muted" data-i18n="harmSub">Transfer a gene from its native organism to a recombinant host while preserving its co-translational folding rhythm (%MinMax correlation) and preventing disome bottlenecks.</p>
+            <h2 data-i18n="synTitle">Multi-Objective SynBio &amp; mRNA Vaccine Sequence Designer</h2>
+            <p class="muted" data-i18n="synSub">Co-optimize folding pause rhythm, 5' hairpin unfolding, mRNA vaccine Uridine depletion (TLR7/8 evasion), Golden Gate / cloning restriction-site scrubbing, and homopolymer removal—with 100% identical protein!</p>
           </div>
         </div>
 
@@ -218,43 +311,56 @@
             <label for="target-org-select" data-i18n="targetOrgLabel">Target Expression Host</label>
             <select id="target-org-select"></select>
           </div>
-          <button id="run-harm-btn" class="btn btn-primary" data-i18n="runHarmBtn">Compare &amp; Harmonize</button>
+          <button id="run-synbio-btn" class="btn btn-primary" data-i18n="runSynBtn">🚀 Optimize SynBio Sequence</button>
         </div>
 
-        <div id="harm-results" class="hidden">
+        <div class="synbio-checks">
+          <label class="toggle-chip"><input id="opt-pauses" type="checkbox" checked /><span data-i18n="optPauses">Preserve Folding Pauses (%MinMax)</span></label>
+          <label class="toggle-chip"><input id="opt-unfold" type="checkbox" checked /><span data-i18n="optUnfold">Melt 5' Hairpin (ΔG_5')</span></label>
+          <label class="toggle-chip vaccine-chip"><input id="opt-vaccine" type="checkbox" /><span data-i18n="optVaccine">💉 mRNA Vaccine Mode: Uridine Depletion (m¹Ψ)</span></label>
+          <label class="toggle-chip"><input id="opt-scrub" type="checkbox" checked /><span data-i18n="optScrub">Scrub Cloning Sites (EcoRI/BamHI/BsaI…)</span></label>
+          <label class="toggle-chip"><input id="opt-hp" type="checkbox" checked /><span data-i18n="optHp">Remove Homopolymers (≥5 nt)</span></label>
+        </div>
+
+        <div id="synbio-results" class="hidden">
+          <div id="synbio-scorecard" class="mut-metrics-grid" style="margin-top:14px;"></div>
+
           <div class="table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th data-i18n="thVariant">Variant</th>
+                  <th data-i18n="thVariant">Design Strategy</th>
                   <th>CAI</th>
                   <th data-i18n="thRhythm">Folding Rhythm (r)</th>
-                  <th data-i18n="thFlux">Protein Flux (/min)</th>
+                  <th>5' ΔG</th>
+                  <th data-i18n="thFlux">Flux (/min)</th>
                   <th data-i18n="thColl">Collision %</th>
                   <th data-i18n="thNgd">NGD Risk</th>
-                  <th data-i18n="thChanged">Codons Changed</th>
                 </tr>
               </thead>
-              <tbody id="harm-tbody"></tbody>
+              <tbody id="synbio-tbody"></tbody>
             </table>
           </div>
 
           <div class="harm-chart-wrap">
-            <h3 data-i18n="harmChartTitle">%MinMax Co-Translational Rhythm Alignment</h3>
+            <div class="chart-head">
+              <h3 data-i18n="harmChartTitle">%MinMax Co-Translational Rhythm Alignment</h3>
+              <button class="btn btn-ghost btn-xs png-btn" data-canvas="harm-canvas" data-name="riboflow_synbio_rhythm">📷 PNG</button>
+            </div>
             <canvas id="harm-canvas" width="1080" height="220"></canvas>
             <div class="legend-row">
               <span class="legend-item"><i class="dot dot-native"></i> <span data-i18n="legNative">Native in Source (Target Rhythm)</span></span>
-              <span class="legend-item"><i class="dot dot-harm"></i> <span data-i18n="legHarm">RiboFlow Harmonized</span></span>
+              <span class="legend-item"><i class="dot dot-harm"></i> <span data-i18n="legSyn">RiboFlow v2.0 SynBio Designed</span></span>
               <span class="legend-item"><i class="dot dot-naive"></i> <span data-i18n="legNaive">Naive CAI Optimized (Flattened Pauses)</span></span>
             </div>
           </div>
 
           <div class="harm-export">
             <div class="section-head">
-              <h3 data-i18n="harmFastaTitle">Harmonized CDS Output (100% Identical Protein)</h3>
+              <h3 data-i18n="harmFastaTitle">SynBio Ready-to-Order CDS FASTA (100% Identical Protein)</h3>
               <div class="section-actions">
                 <button id="copy-harm-btn" class="btn btn-secondary" data-i18n="copyFastaBtn">Copy FASTA</button>
-                <button id="load-harm-btn" class="btn btn-primary" data-i18n="loadHarmBtn">Simulate Harmonized Gene</button>
+                <button id="load-harm-btn" class="btn btn-primary" data-i18n="loadHarmBtn">Load Designed Gene into Simulator</button>
               </div>
             </div>
             <pre id="harm-fasta-out" class="fasta-pre"></pre>
@@ -263,9 +369,37 @@
       </div>
     </section>
 
+    <!-- TAB 5: TASEP PHASE DIAGRAM -->
+    <section id="tab-phase" class="tab-panel">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="phaseTitle">TASEP Statistical-Physics Phase Transition Diagram (α Sweep)</h2>
+            <p class="muted" data-i18n="phaseSub">Sweeps initiation rate α from 0.08 to 2.20 /s to reveal the exact critical threshold α_c where the transcript transitions from Initiation-Limited (Low-Density) into a Ribosome Traffic Jam (High-Density).</p>
+          </div>
+          <div class="section-actions">
+            <button id="run-phase-btn" class="btn btn-primary" data-i18n="runPhaseBtn">📈 Run Phase Transition Sweep</button>
+            <button class="btn btn-ghost png-btn" data-canvas="phase-canvas" data-name="riboflow_phase_diagram">📷 PNG</button>
+          </div>
+        </div>
+
+        <div id="phase-metrics" class="mut-metrics-grid hidden"></div>
+
+        <div class="canvas-wrap">
+          <canvas id="phase-canvas" width="1100" height="290"></canvas>
+        </div>
+
+        <div class="legend-row">
+          <span class="legend-item"><i class="dot dot-harm"></i> <span data-i18n="legFluxWT">Protein Flux J(α) — Current Gene</span></span>
+          <span class="legend-item"><i class="dot dot-coll"></i> <span data-i18n="legNgdWT">NGD Collision Risk — Current Gene</span></span>
+          <span class="legend-item"><i class="dot dot-sky"></i> <span data-i18n="legFluxOpt">Flux J(α) — SynBio Optimized (if run)</span></span>
+        </div>
+      </div>
+    </section>
+
     <footer class="footer">
-      <span>RiboFlow • Exact CTMC ℓ-TASEP Ribosome Traffic &amp; Codon Harmonization Suite</span>
-      <span>Built for Molecular Biology &amp; Bioinformatics</span>
+      <span>RiboFlow v2.0 • Exact CTMC ℓ-TASEP, Turner 5' RNA Folding, Exit-Tunnel Physics &amp; mRNA SynBio Suite</span>
+      <span>Built by Muhammed Emir Esti — Molecular Biology &amp; Bioinformatics</span>
     </footer>
   </div>
 

@@ -1,4 +1,4 @@
-"""Zero-dependency HTTP/JSON server for the RiboFlow interactive web dashboard."""
+"""Zero-dependency HTTP/JSON server for the RiboFlow v2.0 interactive web dashboard."""
 
 from __future__ import annotations
 
@@ -11,12 +11,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+from ..folding import fold_5prime_window, unfold_5prime_synonymously
 from ..harmonizer import compare_harmonization
 from ..mutation import apply_synonymous_mutations, scan_critical_silent_mutations
 from ..organisms import ORGANISMS, get_organism
 from ..samples import SAMPLES
 from ..sequence import analyze_sequence, parse_fasta_or_raw
-from ..simulator import simulate_ribosome_traffic
+from ..simulator import simulate_ribosome_traffic, sweep_phase_diagram
+from ..synbio import design_synbio_sequence
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -32,7 +34,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: Any) -
 
 
 def handle_api_post(path: str, payload: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
-    """Pure request router for JSON API endpoints (easily unit-testable)."""
+    """Pure request router for JSON API endpoints (also runs directly inside Pyodide)."""
     try:
         if path == "/api/simulate":
             raw_seq = str(payload.get("sequence", ""))
@@ -41,6 +43,8 @@ def handle_api_post(path: str, payload: Dict[str, Any]) -> Tuple[int, Dict[str, 
             init_rate = payload.get("initiation_rate")
             alpha = float(init_rate) if init_rate is not None else None
             duration = min(300.0, max(20.0, float(payload.get("duration", 120.0))))
+            couple_5p = bool(payload.get("couple_5prime_folding", True))
+            tunnel_drag = bool(payload.get("enable_tunnel_drag", True))
             seed = int(payload.get("seed", 42))
 
             analysis = analyze_sequence(dna, org)
@@ -50,11 +54,89 @@ def handle_api_post(path: str, payload: Dict[str, Any]) -> Tuple[int, Dict[str, 
                 initiation_rate=alpha,
                 duration_seconds=duration,
                 capture_frames=160,
+                couple_5prime_folding=couple_5p,
+                enable_tunnel_drag=tunnel_drag,
                 seed=seed,
             )
             return HTTPStatus.OK, {
                 "analysis": asdict(analysis),
                 "simulation": asdict(sim),
+            }
+
+        if path == "/api/fold":
+            raw_seq = str(payload.get("sequence", ""))
+            _, dna = parse_fasta_or_raw(raw_seq)
+            window_nt = min(60, max(18, int(payload.get("window_nt", 45))))
+            rep = fold_5prime_window(dna, window_nt=window_nt)
+            return HTTPStatus.OK, asdict(rep)
+
+        if path == "/api/unfold":
+            raw_seq = str(payload.get("sequence", ""))
+            _, dna = parse_fasta_or_raw(raw_seq)
+            res = unfold_5prime_synonymously(dna)
+            return HTTPStatus.OK, asdict(res)
+
+        if path == "/api/phase":
+            raw_seq = str(payload.get("sequence", ""))
+            _, dna = parse_fasta_or_raw(raw_seq)
+            org = get_organism(str(payload.get("organism", "ecoli")))
+            couple_5p = bool(payload.get("couple_5prime_folding", True))
+            tunnel_drag = bool(payload.get("enable_tunnel_drag", True))
+            seed = int(payload.get("seed", 42))
+
+            wt_phase = sweep_phase_diagram(
+                dna,
+                org,
+                couple_5prime_folding=couple_5p,
+                enable_tunnel_drag=tunnel_drag,
+                seed=seed,
+            )
+            out: Dict[str, Any] = {"wildtype": asdict(wt_phase)}
+            compare_seq = payload.get("compare_sequence")
+            if compare_seq:
+                _, dna2 = parse_fasta_or_raw(str(compare_seq))
+                opt_phase = sweep_phase_diagram(
+                    dna2,
+                    org,
+                    couple_5prime_folding=couple_5p,
+                    enable_tunnel_drag=tunnel_drag,
+                    seed=seed,
+                )
+                out["optimized"] = asdict(opt_phase)
+            return HTTPStatus.OK, out
+
+        if path == "/api/synbio":
+            raw_seq = str(payload.get("sequence", ""))
+            _, dna = parse_fasta_or_raw(raw_seq)
+            src = get_organism(str(payload.get("source", "human")))
+            host = get_organism(str(payload.get("host", "ecoli")))
+            init_rate = payload.get("initiation_rate")
+            alpha = float(init_rate) if init_rate is not None else None
+            seed = int(payload.get("seed", 42))
+
+            syn_report = design_synbio_sequence(
+                dna,
+                source=src,
+                host=host,
+                preserve_pauses=bool(payload.get("preserve_pauses", True)),
+                unfold_5prime=bool(payload.get("unfold_5prime", True)),
+                uridine_deplete=bool(payload.get("uridine_deplete", False)),
+                scrub_restriction_sites=bool(payload.get("scrub_restriction_sites", True)),
+                avoid_homopolymers=bool(payload.get("avoid_homopolymers", True)),
+                initiation_rate=alpha,
+                seed=seed,
+            )
+            harm_report = compare_harmonization(
+                dna,
+                source=src,
+                host=host,
+                initiation_rate=alpha,
+                duration_seconds=80.0,
+                seed=seed,
+            )
+            return HTTPStatus.OK, {
+                "synbio": asdict(syn_report),
+                "harmonization": asdict(harm_report),
             }
 
         if path == "/api/mutate":
@@ -181,7 +263,7 @@ class RiboFlowRequestHandler(BaseHTTPRequestHandler):
 def run_server(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = False) -> None:
     server = ThreadingHTTPServer((host, port), RiboFlowRequestHandler)
     url = f"http://{host}:{port}"
-    print(f"RiboFlow Web Laboratory running at {url}")
+    print(f"RiboFlow v2.0 Web Laboratory running at {url}")
     print("Press Ctrl+C to stop.")
     if open_browser:
         webbrowser.open(url)
